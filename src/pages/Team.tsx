@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { teamMemberSchema } from "@/lib/validators";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { SheetImport } from "@/components/sheet-import";
 
 interface TeamMember {
   id: string;
@@ -80,6 +81,26 @@ const Team = () => {
           <h1 className="text-2xl font-semibold">Team members</h1>
           <p className="text-sm text-muted-foreground">People who own laptops and receive maintenance schedules.</p>
         </div>
+        <div className="flex gap-2">
+          <SheetImport
+            expectedColumns={["name", "email", "team"]}
+            mapRow={(r) => {
+              const parsed = teamMemberSchema.safeParse({ name: r.name, email: r.email, team: r.team });
+              if (!parsed.success || !user) return null;
+              return {
+                name: parsed.data.name,
+                email: parsed.data.email,
+                team: parsed.data.team || null,
+                owner_id: user.id,
+              };
+            }}
+            onImport={async (rows) => {
+              const { error, count } = await supabase.from("team_members").insert(rows, { count: "exact" });
+              if (error) throw new Error(error.message);
+              load();
+              return count ?? rows.length;
+            }}
+          />
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" />Add member</Button>
