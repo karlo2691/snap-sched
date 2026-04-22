@@ -49,7 +49,11 @@ const Team = () => {
     });
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
     setBusy(true);
-    const payload = { ...parsed.data, team: parsed.data.team || null };
+    const payload = {
+      name: parsed.data.name,
+      email: parsed.data.email,
+      team: parsed.data.team || null,
+    };
     const { error } = editing
       ? await supabase.from("team_members").update(payload).eq("id", editing.id)
       : await supabase.from("team_members").insert([{ ...payload, owner_id: user.id }]);
