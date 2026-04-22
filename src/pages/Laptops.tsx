@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { laptopSchema } from "@/lib/validators";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { SheetImport } from "@/components/sheet-import";
 
 interface Laptop {
   id: string;
@@ -99,6 +100,34 @@ const Laptops = () => {
           <h1 className="text-2xl font-semibold">Laptops</h1>
           <p className="text-sm text-muted-foreground">Inventory of laptops to maintain.</p>
         </div>
+        <div className="flex gap-2">
+          <SheetImport
+            expectedColumns={["asset_tag", "model", "team", "owner_email"]}
+            mapRow={(r) => {
+              const tag = r.asset_tag || r["asset tag"] || r.tag;
+              const parsed = laptopSchema.safeParse({
+                asset_tag: tag,
+                model: r.model,
+                team: r.team,
+              });
+              if (!parsed.success || !user) return null;
+              const ownerEmail = (r.owner_email || r["owner email"] || r.owner || r.email || "").toLowerCase();
+              const member = ownerEmail ? members.find((m) => (m as Member & { email?: string }).email?.toLowerCase() === ownerEmail) : null;
+              return {
+                asset_tag: parsed.data.asset_tag,
+                model: parsed.data.model || null,
+                team: parsed.data.team || null,
+                assigned_member_id: member?.id ?? null,
+                owner_id: user.id,
+              };
+            }}
+            onImport={async (rows) => {
+              const { error, count } = await supabase.from("laptops").insert(rows, { count: "exact" });
+              if (error) throw new Error(error.message);
+              load();
+              return count ?? rows.length;
+            }}
+          />
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}>
           <DialogTrigger asChild>
             <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" />Add laptop</Button>
