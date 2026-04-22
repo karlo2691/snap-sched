@@ -112,7 +112,7 @@ const Laptops = () => {
               });
               if (!parsed.success || !user) return null;
               const ownerEmail = (r.owner_email || r["owner email"] || r.owner || r.email || "").toLowerCase();
-              const member = ownerEmail ? members.find((m) => (m as Member & { email?: string }).email?.toLowerCase() === ownerEmail) : null;
+              const member = ownerEmail ? members.find((m) => m.email?.toLowerCase() === ownerEmail) : null;
               return {
                 asset_tag: parsed.data.asset_tag,
                 model: parsed.data.model || null,
