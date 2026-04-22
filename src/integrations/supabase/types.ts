@@ -14,7 +14,136 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      laptops: {
+        Row: {
+          asset_tag: string
+          assigned_member_id: string | null
+          created_at: string
+          id: string
+          model: string | null
+          owner_id: string
+          team: string | null
+        }
+        Insert: {
+          asset_tag: string
+          assigned_member_id?: string | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          owner_id: string
+          team?: string | null
+        }
+        Update: {
+          asset_tag?: string
+          assigned_member_id?: string | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          owner_id?: string
+          team?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "laptops_assigned_member_id_fkey"
+            columns: ["assigned_member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      schedules: {
+        Row: {
+          created_at: string
+          id: string
+          laptop_id: string
+          notes: string | null
+          notified_at: string | null
+          owner_id: string
+          scheduled_date: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          laptop_id: string
+          notes?: string | null
+          notified_at?: string | null
+          owner_id: string
+          scheduled_date: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          laptop_id?: string
+          notes?: string | null
+          notified_at?: string | null
+          owner_id?: string
+          scheduled_date?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_laptop_id_fkey"
+            columns: ["laptop_id"]
+            isOneToOne: false
+            referencedRelation: "laptops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          owner_id: string
+          team: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          owner_id: string
+          team?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          team?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
