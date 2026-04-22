@@ -128,6 +128,7 @@ const Team = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
