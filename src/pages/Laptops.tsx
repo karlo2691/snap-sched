@@ -21,7 +21,7 @@ interface Laptop {
   assigned_member_id: string | null;
   team_members?: { name: string } | null;
 }
-interface Member { id: string; name: string }
+interface Member { id: string; name: string; email: string }
 
 const Laptops = () => {
   const { user } = useAuth();
@@ -35,7 +35,7 @@ const Laptops = () => {
   const load = async () => {
     const [{ data: lp, error: e1 }, { data: tm, error: e2 }] = await Promise.all([
       supabase.from("laptops").select("id,asset_tag,model,team,assigned_member_id,team_members(name)").order("asset_tag"),
-      supabase.from("team_members").select("id,name").order("name"),
+      supabase.from("team_members").select("id,name,email").order("name"),
     ]);
     if (e1) toast.error(e1.message);
     else setLaptops((lp as Laptop[]) ?? []);
@@ -165,6 +165,7 @@ const Laptops = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
