@@ -63,7 +63,7 @@ const Laptops = () => {
     };
     const { error } = editing
       ? await supabase.from("laptops").update(payload).eq("id", editing.id)
-      : await supabase.from("laptops").insert({ ...payload, owner_id: user.id });
+      : await supabase.from("laptops").insert([{ ...payload, owner_id: user.id }]);
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success(editing ? "Laptop updated" : "Laptop added");
