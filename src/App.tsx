@@ -12,6 +12,7 @@ import Auth from "./pages/Auth.tsx";
 import Team from "./pages/Team.tsx";
 import Laptops from "./pages/Laptops.tsx";
 import Schedule from "./pages/Schedule.tsx";
+import Uploads from "./pages/Uploads.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
                 <Route path="/schedule" element={<Schedule />} />
                 <Route path="/laptops" element={<Laptops />} />
                 <Route path="/team" element={<Team />} />
+                <Route path="/uploads" element={<Uploads />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
