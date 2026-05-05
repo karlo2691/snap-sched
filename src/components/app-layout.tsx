@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Calendar, Laptop, LayoutDashboard, LogOut, Users, Wrench } from "lucide-react";
+import { Calendar, FileSpreadsheet, Laptop, LayoutDashboard, LogOut, Users, Wrench } from "lucide-react";
+import { useIsAdmin } from "@/hooks/use-role";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const baseNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
   { to: "/schedule", icon: Calendar, label: "Schedule" },
   { to: "/laptops", icon: Laptop, label: "Laptops" },
@@ -15,6 +16,10 @@ const navItems = [
 export function AppLayout() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
+  const navItems = isAdmin
+    ? [...baseNavItems, { to: "/uploads", icon: FileSpreadsheet, label: "Uploads" }]
+    : baseNavItems;
 
   return (
     <div className="flex min-h-screen bg-background">
