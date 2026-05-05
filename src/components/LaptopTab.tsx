@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,6 +22,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Form,
   FormControl,
   FormField,
@@ -39,9 +49,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Laptop, Plus, Download, Pencil, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Laptop, Plus, Download, Pencil, Loader2, Trash2 } from "lucide-react";
 
-// ─── Schema ──────────────────────────────────────────────────────────────────
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
 const laptopSchema = z.object({
   asset_tag: z.string().min(1, "Asset tag is required"),
@@ -72,7 +83,7 @@ interface TeamMember {
   team: string | null;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface LaptopTabProps {
   ownerId: string;
@@ -85,7 +96,11 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLaptop, setEditingLaptop] = useState<LaptopRow | null>(null);
 
-  // ── Queries ────────────────────────────────────────────────────────────────
+  // ── Selection state ────────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  // ─── Queries ──────────────────────────────────────────────────────────────
 
   const { data: laptops = [], isLoading: laptopsLoading } = useQuery({
     queryKey: ["laptops", ownerId],
@@ -93,14 +108,11 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
       const { data, error } = await supabase
         .from("laptops")
         .select(
-          `
-          id, asset_tag, model, team, assigned_member_id, owner_id, created_at,
-          team_members ( id, name, email )
-        `
+          `id, asset_tag, model, team, assigned_member_id, owner_id, created_at,
+           team_members ( id, name, email )`
         )
         .eq("owner_id", ownerId)
         .order("created_at", { ascending: false });
-
       if (error) throw error;
       return (data ?? []) as LaptopRow[];
     },
@@ -121,16 +133,34 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
     enabled: !!ownerId,
   });
 
-  // ── Form ───────────────────────────────────────────────────────────────────
+  // ─── Derived selection values ─────────────────────────────────────────────
+
+  const allIds = useMemo(() => laptops.map((l) => l.id), [laptops]);
+  const selectedCount = selectedIds.size;
+  const allSelected = allIds.length > 0 && selectedIds.size === allIds.length;
+  const someSelected = selectedIds.size > 0 && !allSelected;
+
+  // ─── Select All handler ───────────────────────────────────────────────────
+
+  const handleSelectAll = (checked: boolean | "indeterminate") => {
+    setSelectedIds(checked === true ? new Set(allIds) : new Set());
+  };
+
+  // ─── Individual row checkbox ──────────────────────────────────────────────
+
+  const handleRowSelect = (id: string, checked: boolean | "indeterminate") => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      checked === true ? next.add(id) : next.delete(id);
+      return next;
+    });
+  };
+
+  // ─── Form ─────────────────────────────────────────────────────────────────
 
   const form = useForm<LaptopFormValues>({
     resolver: zodResolver(laptopSchema),
-    defaultValues: {
-      asset_tag: "",
-      model: "",
-      team: "",
-      assigned_member_id: null,
-    },
+    defaultValues: { asset_tag: "", model: "", team: "", assigned_member_id: null },
   });
 
   const openCreate = () => {
@@ -150,7 +180,7 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
     setDialogOpen(true);
   };
 
-  // ── Mutations ──────────────────────────────────────────────────────────────
+  // ─── Create mutation ──────────────────────────────────────────────────────
 
   const createMutation = useMutation({
     mutationFn: async (values: LaptopFormValues) => {
@@ -160,13 +190,11 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
           asset_tag: values.asset_tag,
           model: values.model || null,
           team: values.team || null,
-          // ✅ Capture the assigned_member_id (owner field) on creation
           assigned_member_id: values.assigned_member_id || null,
           owner_id: ownerId,
         })
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
@@ -176,33 +204,29 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
       });
       setDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["laptops", ownerId] });
-
-      // ✅ Programmatically trigger Excel sync — captures assigned owner
       await triggerSync(ownerId, true);
     },
-    onError: (err: Error) => {
-      toast.error("Failed to add laptop", { description: err.message });
-    },
+    onError: (err: Error) =>
+      toast.error("Failed to add laptop", { description: err.message }),
   });
+
+  // ─── Update mutation ──────────────────────────────────────────────────────
 
   const updateMutation = useMutation({
     mutationFn: async (values: LaptopFormValues) => {
       if (!editingLaptop) throw new Error("No laptop selected");
-
       const { data, error } = await supabase
         .from("laptops")
         .update({
           asset_tag: values.asset_tag,
           model: values.model || null,
           team: values.team || null,
-          // ✅ Capture updated assigned_member_id (owner field) on update
           assigned_member_id: values.assigned_member_id || null,
         })
         .eq("id", editingLaptop.id)
         .eq("owner_id", ownerId)
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
@@ -213,38 +237,79 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
       setDialogOpen(false);
       setEditingLaptop(null);
       queryClient.invalidateQueries({ queryKey: ["laptops", ownerId] });
-
-      // ✅ Programmatically trigger Excel sync — writes updated owner to Excel
       await triggerSync(ownerId, true);
     },
-    onError: (err: Error) => {
-      toast.error("Failed to update laptop", { description: err.message });
-    },
+    onError: (err: Error) =>
+      toast.error("Failed to update laptop", { description: err.message }),
   });
 
+  // ─── Bulk delete mutation ─────────────────────────────────────────────────
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // Single batch DELETE — Supabase handles all IDs in one round-trip
+      const { error } = await supabase
+        .from("laptops")
+        .delete()
+        .in("id", ids)
+        .eq("owner_id", ownerId); // RLS-safe: only own records
+      if (error) throw error;
+      return ids;
+    },
+    onSuccess: async (deletedIds) => {
+      const count = deletedIds.length;
+
+      // Clear deleted IDs from selection state
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        deletedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+
+      // Refresh table data
+      queryClient.invalidateQueries({ queryKey: ["laptops", ownerId] });
+
+      // Re-sync Excel — removes deleted records from the sheet
+      await triggerSync(ownerId, true);
+
+      toast.success(
+        `${count} laptop${count === 1 ? "" : "s"} deleted`,
+        {
+          description:
+            "Excel data list has been updated to reflect the removal.",
+        }
+      );
+    },
+    onError: (err: Error) =>
+      toast.error("Bulk delete failed", { description: err.message }),
+  });
+
+  const handleConfirmDelete = () => {
+    setConfirmDeleteOpen(false);
+    bulkDeleteMutation.mutate(Array.from(selectedIds));
+  };
+
   const onSubmit = (values: LaptopFormValues) => {
-    if (editingLaptop) {
-      updateMutation.mutate(values);
-    } else {
-      createMutation.mutate(values);
-    }
+    editingLaptop ? updateMutation.mutate(values) : createMutation.mutate(values);
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const isBulkDeleting = bulkDeleteMutation.isPending;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+
+      {/* ── Top header bar ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Laptop className="h-5 w-5 text-muted-foreground" />
           <h2 className="text-lg font-medium">Laptops</h2>
           <Badge variant="secondary">{laptops.length}</Badge>
         </div>
+
         <div className="flex items-center gap-2">
-          {/* ✅ Download button — generates Excel with assigned owner column */}
           <Button
             variant="outline"
             size="sm"
@@ -259,7 +324,6 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
             Export Excel
           </Button>
 
-          {/* Add laptop dialog */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" onClick={openCreate}>
@@ -276,11 +340,7 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
               </DialogHeader>
 
               <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit(onSubmit)}
-                  className="space-y-4"
-                >
-                  {/* Asset Tag */}
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
                     name="asset_tag"
@@ -295,7 +355,6 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
                     )}
                   />
 
-                  {/* Model */}
                   <FormField
                     control={form.control}
                     name="model"
@@ -314,7 +373,6 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
                     )}
                   />
 
-                  {/* Team */}
                   <FormField
                     control={form.control}
                     name="team"
@@ -333,7 +391,6 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
                     )}
                   />
 
-                  {/* ✅ Assigned Owner — this field is captured and written to Excel */}
                   <FormField
                     control={form.control}
                     name="assigned_member_id"
@@ -388,7 +445,29 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
         </div>
       </div>
 
-      {/* Table */}
+      {/* ── Bulk action bar — appears only when rows are selected ────────────── */}
+      {selectedCount > 0 && (
+        <div className="flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/5 px-4 py-2.5">
+          <span className="text-sm font-medium text-destructive">
+            {selectedCount} record{selectedCount === 1 ? "" : "s"} selected
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={isBulkDeleting}
+          >
+            {isBulkDeleting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-2" />
+            )}
+            Delete Selected
+          </Button>
+        </div>
+      )}
+
+      {/* ── Table ─────────────────────────────────────────────────────────────── */}
       {laptopsLoading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -404,29 +483,55 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
           <Table>
             <TableHeader>
               <TableRow>
+                {/* ── Master Select All checkbox ──────────────────────────── */}
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={
+                      allSelected ? true : someSelected ? "indeterminate" : false
+                    }
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all laptops"
+                  />
+                </TableHead>
                 <TableHead>Asset Tag</TableHead>
                 <TableHead>Model</TableHead>
                 <TableHead>Team</TableHead>
-                {/* ✅ Assigned Owner column — mirrors the Excel column */}
                 <TableHead>Assigned Owner</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {laptops.map((laptop) => {
                 const member = Array.isArray(laptop.team_members)
                   ? laptop.team_members[0]
                   : laptop.team_members;
 
+                const isSelected = selectedIds.has(laptop.id);
+
                 return (
-                  <TableRow key={laptop.id}>
+                  <TableRow
+                    key={laptop.id}
+                    className={isSelected ? "bg-muted/50" : undefined}
+                  >
+                    {/* ── Row-level checkbox ─────────────────────────────── */}
+                    <TableCell>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) =>
+                          handleRowSelect(laptop.id, checked)
+                        }
+                        aria-label={`Select ${laptop.asset_tag}`}
+                      />
+                    </TableCell>
+
                     <TableCell className="font-mono text-sm">
                       {laptop.asset_tag}
                     </TableCell>
                     <TableCell>{laptop.model ?? "—"}</TableCell>
                     <TableCell>{laptop.team ?? "—"}</TableCell>
-                    {/* ✅ Shows the captured assigned owner */}
+
                     <TableCell>
                       {member ? (
                         <span className="font-medium">{member.name}</span>
@@ -436,9 +541,11 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
                         </span>
                       )}
                     </TableCell>
+
                     <TableCell className="text-sm text-muted-foreground">
                       {member?.email ?? "—"}
                     </TableCell>
+
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
@@ -455,6 +562,35 @@ export function LaptopTab({ ownerId }: LaptopTabProps) {
           </Table>
         </div>
       )}
+
+      {/* ── Bulk Delete Confirmation Dialog ───────────────────────────────────── */}
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedCount} laptop{selectedCount === 1 ? "" : "s"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove{" "}
+              <strong>
+                {selectedCount} record{selectedCount === 1 ? "" : "s"}
+              </strong>{" "}
+              from the database and update the Excel data list. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Yes, delete {selectedCount === 1 ? "it" : "all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
